@@ -12,13 +12,22 @@ parser.add_argument("--label", required=True)
 parser.add_argument("--user", required=True, help="User to report to provider")
 parser.add_argument("--nice", type=float, default=1)
 parser.add_argument("--noSSH", action='store_true', default=False)
+parser.add_argument("--disk1SizeGB", type=int, default=None)
 args = parser.parse_args()
 
 print "Connecting"
 client = clientfactory.factory()
 print "Allocating"
+hardwareConstraints = dict()
+if args.disk1SizeGB is not None:
+    hardwareConstraints['disk1SizeGB'] = args.disk1SizeGB
+print "Hardware Constraints:", hardwareConstraints
+requirement = api.Requirement(
+    imageLabel=args.label,
+    imageHint="playaround",
+    hardwareConstraints=hardwareConstraints)
 allocation = client.allocate(
-    requirements={'node': api.Requirement(imageLabel=args.label, imageHint="playaround")},
+    requirements={'node': requirement},
     allocationInfo=api.AllocationInfo(user=args.user, purpose="playaround", nice=args.nice))
 allocation.wait(timeout=8 * 60)
 assert allocation.done(), "Allocation failed"
