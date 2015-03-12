@@ -13,6 +13,13 @@ class Run:
             "sh 2>&1 << 'RACKATTACK_SSH_RUN_SCRIPT_EOF'",
             bashScript,
             "RACKATTACK_SSH_RUN_SCRIPT_EOF\n"])
+        try:
+            return self.execute(command, outputTimeout)
+        except Exception as e:
+            e.args += ('When running bash script "%s"' % bashScript),
+            raise
+
+    def execute(self, command, outputTimeout=20 * 60):
         transport = self._sshClient.get_transport()
         chan = transport.open_session()
         try:
@@ -22,34 +29,36 @@ class Run:
             stdout = chan.makefile('rb', -1)
             stderr = chan.makefile_stderr('rb', -1)
             stdin.close()
-            outputArray = []
-            try:
-                while True:
-                    segment = stdout.read(4 * 1024)
-                    if segment == "":
-                        break
-                    outputArray.append(segment)
-            except socket.timeout:
-                output = "".join(outputArray)
-                e = socket.timeout(
-                    "Timeout running '%s', no input for timeout of '%s'. Partial output was\n:%s" % (
-                        bashScript, outputTimeout, output))
-                e.output = output
-                raise e
-            output = "".join(outputArray)
+            output = self._readOutput(stdout, outputTimeout)
             status = chan.recv_exit_status()
             stderr.read()
             stdout.close()
             stderr.close()
-            self._logger.debug("Bash script output:\n\n%(output)s\n", dict(output=output))
+            self._logger.debug("SSH Execution output:\n\n%(output)s\n", dict(output=output))
             if status != 0:
-                e = Exception("Failed running '%s', status '%s', output was:\n%s" % (
-                    bashScript, status, output))
+                e = Exception("Failed executing, status '%s', output was:\n%s" % (status, output))
                 e.output = output
                 raise e
             return output
         finally:
             chan.close()
+
+    def _readOutput(self, stdout, outputTimeout):
+        outputArray = []
+        try:
+            while True:
+                segment = stdout.read(4 * 1024)
+                if segment == "":
+                    break
+                outputArray.append(segment)
+        except socket.timeout:
+            output = "".join(outputArray)
+            e = socket.timeout(
+                "Timeout executing, no input for timeout of '%s'. Partial output was\n:%s" % (
+                    outputTimeout, output))
+            e.output = output
+            raise e
+        return "".join(outputArray)
 
     def backgroundScript(self, bashScript):
         command = "\n".join([
