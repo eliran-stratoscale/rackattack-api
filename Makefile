@@ -9,6 +9,6 @@ check_convention:
 delayed_racktest:
 	UPSETO_JOIN_PYTHON_NAMESPACES=yes PYTHONPATH=$(PWD):$(PWD)/py python test/test.py
 virttest:
-	RACKATTACK_PROVIDER=tcp://localhost:1014@tcp://localhost:1015@http://localhost:1016 $(MAKE) delayed_racktest
+	RACKATTACK_PROVIDER=tcp://localhost:1014@@amqp://guest:guest@localhost:1013/%2F@@http://localhost:1016 $(MAKE) delayed_racktest
 phystest:
-	RACKATTACK_PROVIDER=tcp://rackattack-provider:1014@tcp://rackattack-provider:1015@http://rackattack-provider:1016 $(MAKE) delayed_racktest
+	RACKATTACK_PROVIDER=tcp://rackattack-provider:1014@@amqp://guest:guest@rackattack-provider:1013/%2F@@http://rackattack-provider:1016 $(MAKE) delayed_racktest

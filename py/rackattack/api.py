@@ -1,4 +1,4 @@
-VERSION = 4
+VERSION = 5
 
 
 class Client:
@@ -128,6 +128,16 @@ class Allocation:
         Fetch debugging information about the allocation. Usefull for
         debugging timeouts and such.
         returns filename, contents
+        """
+        assert False, "Deriving class must implement"
+
+    def registerProgressCallback(self, callback):
+        """
+        callback receives all inaugurator progress messages. Can be used
+        to create a "smart" timeout policy.
+        callback is expeced to have two named parameters:
+        - event - the dict event from the inaugurator
+        - overallPercent - a number between 0 and 100
         """
         assert False, "Deriving class must implement"
 

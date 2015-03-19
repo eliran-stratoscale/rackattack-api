@@ -1,66 +1,103 @@
 import threading
 import logging
-import errno
-import socket
-from rackattack.tcp import transport
+import pika
+import simplejson
+from rackattack.tcp import suicide
+from rackattack.tcp import publish
+
+_logger = logging.getLogger(__name__)
 
 
 class Subscribe(threading.Thread):
-    _SAFE_TERMINATION_ERRORS = [errno.EPIPE, errno.ECONNRESET, errno.ENOTCONN, errno.EBADF]
-
-    def __init__(self, connectTo):
-        self._connectTo = connectTo
-        self._transport = transport.Transport(connectTo)
+    def __init__(self, amqpURL):
+        self._connection = None
+        self._channel = None
+        self._amqpURL = amqpURL
         self._registered = dict()
+        self._readyEvent = threading.Event()
+        self._closed = False
         threading.Thread.__init__(self)
         self.daemon = True
         threading.Thread.start(self)
 
-    def register(self, callback, topic="default topic"):
-        assert callback not in self._registered.get(topic, [])
-        topicList = self._registered.setdefault(topic, [])
-        topicList.append(callback)
-        if len(topicList) == 1:
-            self._transport.sendJSON(dict(cmd='subscribe', topic=topic))
+    def registerForInagurator(self, id, callback):
+        exchange = self._exchangeForInaugurator(id)
+        assert exchange not in self._registered
+        self._listen(exchange, callback)
 
-    def unregister(self, callback, topic="default topic"):
-        assert callback in self._registered.get(topic, [])
-        topicList = self._registered[topic]
-        topicList.remove(callback)
-        if len(topicList) == 0:
-            self._transport.sendJSON(dict(cmd='unsubscribe', topic=topic))
+    def unregisterForInaugurator(self, id):
+        exchange = self._exchangeForInaugurator(id)
+        assert exchange in self._registered
+        self._channel.basic_cancel(lambda *args: None, self._registered[exchange])
+        del self._registered[exchange]
+
+    def registerForAllocation(self, id, callback):
+        exchange = publish.Publish.allocationExchange(id)
+        assert exchange not in self._registered
+        self._listen(exchange, callback)
+
+    def unregisterForAllocation(self, id):
+        exchange = publish.Publish.allocationExchange(id)
+        assert exchange in self._registered
+        self._channel.basic_cancel(lambda *args: None, self._registered[exchange])
+        del self._registered[exchange]
 
     def close(self):
-        self._transport.close()
+        _logger.info("Closing connection")
+        self._closed = True
+        self._channel.close()
+        self._connection.close()
+
+    def _exchangeForInaugurator(self, id):
+        return "inaugurator_status__%s" % id
+
+    def _onConnectionClosed(self, connection, reply_code, reply_text):
+        self._channel = None
+        if self._closed:
+            self._connection.ioloop.stop()
+        else:
+            _logger.error("Connection closed, committing suicide: %(replyCode)s %(replyText)s", dict(
+                replyCode=reply_code, replyText=reply_text))
+            suicide.killSelf()
+
+    def _onConnectionOpen(self, unused_connection):
+        _logger.info('Connection opened')
+        self._connection.add_on_close_callback(self._onConnectionClosed)
+        self._connection.channel(on_open_callback=self._onChannelOpen)
+
+    def _onChannelClosed(self, channel, reply_code, reply_text):
+        _logger.error('Channel %(channel)i was closed: (%(replyCode)s) %(replyText)s', dict(
+            channel=channel, replyCode=reply_code, replyText=reply_text))
+        self._connection.close()
+
+    def _onChannelOpen(self, channel):
+        self._channel = channel
+        self._channel.add_on_close_callback(self._onChannelClosed)
+        self._readyEvent.set()
+
+    def _listen(self, exchangeName, callback):
+        def onMessage(channel, basicDeliver, properties, body):
+            self._channel.basic_ack(basicDeliver.delivery_tag)
+            callback(simplejson.loads(body))
+        def onBind(queueName, consumerTag):
+            self._channel.basic_consume(onMessage, queueName, consumer_tag=consumerTag)
+            _logger.debug("Listening on exchange %(exchange)s", dict(exchange=exchangeName))
+        def onQueueDeclared(methodFrame):
+            queue = methodFrame.method.queue
+            consumerTag = queue + "__consumer"
+            self._registered[exchangeName] = consumerTag
+            self._channel.queue_bind(lambda *args: onBind(queue, consumerTag), queue, exchangeName, routing_key='')
+        def onExchangeDeclared(frame):
+            self._channel.queue_declare(callback=onQueueDeclared, exclusive=True)
+        self._readyEvent.wait(5)
+        if not self._readyEvent.isSet():
+            raise Exception("Timeout waiting for subscriber to connect to rabbitMQ")
+        self._channel.exchange_declare(onExchangeDeclared, exchangeName, 'fanout')
 
     def run(self):
-        try:
-            logging.info(
-                "Rackattack Subscriber started connected to '%(connectTo)s' started",
-                dict(connectTo=self._connectTo))
-            while not self._transport.closed():
-                try:
-                    self._work()
-                except transport.LocalyClosedError:
-                    logging.info("Rackattack subscriber transport closed, locally")
-                    return
-                except transport.RemotelyClosedError:
-                    logging.error("Rackattack subscriber transport closed, remotely")
-                    raise
-                except socket.error as e:
-                    if e.errno not in self._SAFE_TERMINATION_ERRORS:
-                        raise
-            logging.info("Rackattack subscriber transport closed")
-        except:
-            logging.exception(
-                "Rackattack Subscriber connected to '%(connectTo)s' aborts",
-                dict(connectTo=self._connectTo))
-            raise
-
-    def _work(self):
-        message = self._transport.receiveJSON(timeout=None)
-        try:
-            for callback in list(self._registered.get(message['topic'])):
-                callback(message['arguments'])
-        except Exception:
-            logging.exception('Handling Published Event')
+        _logger.info('Connecting to %(amqpURL)s', dict(amqpURL=self._amqpURL))
+        self._connection = pika.SelectConnection(
+            pika.URLParameters(self._amqpURL),
+            self._onConnectionOpen,
+            stop_ioloop_on_close=False)
+        self._connection.ioloop.start()

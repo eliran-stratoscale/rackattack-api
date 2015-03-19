@@ -1,80 +1,39 @@
-from twisted.protocols import basic
-from twisted.internet import protocol
-from twisted.internet import reactor
-import struct
+from inaugurator.server import config
 import logging
+import pika
 import simplejson
 
 
-class PublishProtocol(basic.Int32StringReceiver):
-    def __init__(self, subscriptions):
-        self._subscriptions = subscriptions
-        self._mine = []
-
-    def connectionMade(self):
-        basic.Int32StringReceiver.connectionMade(self)
-        self.transport.setTcpNoDelay(True)
-
-    def stringReceived(self, string):
-        try:
-            request = simplejson.loads(string)
-            topic = request['topic']
-            if request['cmd'] == 'subscribe':
-                assert topic not in self._mine
-                self._mine.append(topic)
-                self._subscriptions.setdefault(topic, []).append(self)
-            elif request['cmd'] == 'unsubscribe':
-                assert topic in self._mine
-                self._subscriptions.setdefault(topic, []).remove(self)
-                self._mine.remove(topic)
-            else:
-                raise Exception("Unknown request: %s" % request)
-        except:
-            logging.exception("Failure handling, aborting connection")
-            self.transport.loseConnection()
-
-    def connectionList(self, reason):
-        self._unsubscribe()
-
-    def _unsubscribe(self):
-        for topic in self._mine:
-            self._subscriptions.setdefault(topic, []).remove(self)
-
-
-class PublishFactory(protocol.Factory):
-    _HEADER = "!I"
-
-    def __init__(self):
-        self._subscriptions = {}
-
-    def buildProtocol(self, addr):
-        return PublishProtocol(self._subscriptions)
-
-    def publish(self, topic, arguments):
-        json = simplejson.dumps(dict(topic=topic, arguments=arguments))
-        message = self._lengthHeader(len(json)) + json
-        reactor.callFromThread(self._publish, topic, message)
-
-    def _publish(self, topic, message):
-        for connection in self._subscriptions.get(topic, []):
-            connection.transport.write(message)
-
-    def _lengthHeader(self, length):
-        return struct.pack(self._HEADER, length)
-
-
 class Publish:
-    def __init__(self, factory):
-        self._factory = factory
+    def __init__(self, amqpURL):
+        self._declaredExchanges = set()
+        self._amqpURL = amqpURL
+        self._connect()
 
     def allocationChangedState(self, allocationID):
-        self._factory.publish("default topic", dict(
-            event='allocation__changedState', allocationID=allocationID))
+        self._publish(self.allocationExchange(allocationID), dict(
+            event='changedState', allocationID=allocationID))
 
     def allocationProviderMessage(self, allocationID, message):
-        self._factory.publish("default topic", dict(
-            event='allocation__providerMessage', allocationID=allocationID, message=message))
+        self._publish(self.allocationExchange(allocationID), dict(
+            event='providerMessage', allocationID=allocationID, message=message))
 
     def allocationWithdraw(self, allocationID, message):
-        self._factory.publish("default topic", dict(
-            event='allocation__withdrawn', allocationID=allocationID, message=message))
+        self._publish(self.allocationExchange(allocationID), dict(
+            event='withdrawn', allocationID=allocationID, message=message))
+
+    def _publish(self, exchange, message):
+        if exchange not in self._declaredExchanges:
+            self._declaredExchanges.add(exchange)
+            self._channel.exchange_declare(exchange=exchange, type='fanout')
+        self._channel.basic_publish(exchange=exchange, routing_key='', body=simplejson.dumps(message))
+
+    def _connect(self):
+        logging.info("Rackattack event publisher connects to rabbit MQ %(url)s", dict(url=config.AMQP_URL))
+        parameters = pika.URLParameters(config.AMQP_URL)
+        self._connection = pika.BlockingConnection(parameters)
+        self._channel = self._connection.channel()
+
+    @classmethod
+    def allocationExchange(cls, id):
+        return "allocation_status__%s" % id

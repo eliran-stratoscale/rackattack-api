@@ -19,7 +19,7 @@ class Client(api.Client):
         self._closed = False
         self._activeAllocations = []
         self.call("handshake", versionInfo=dict(RACKATTACK_VERSION=api.VERSION))
-        self._subscribe = subscribe.Subscribe(connectTo=providerSubscribeLocation)
+        self._subscribe = subscribe.Subscribe(amqpURL=providerSubscribeLocation)
         self._connectionToProviderInterrupted = suicide.killSelf
         self._heartbeat = heartbeat.HeartBeat(self)
 
