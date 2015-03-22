@@ -79,16 +79,21 @@ class Subscribe(threading.Thread):
         def onMessage(channel, basicDeliver, properties, body):
             self._channel.basic_ack(basicDeliver.delivery_tag)
             callback(simplejson.loads(body))
+
         def onBind(queueName, consumerTag):
             self._channel.basic_consume(onMessage, queueName, consumer_tag=consumerTag)
             _logger.debug("Listening on exchange %(exchange)s", dict(exchange=exchangeName))
+
         def onQueueDeclared(methodFrame):
             queue = methodFrame.method.queue
             consumerTag = queue + "__consumer"
             self._registered[exchangeName] = consumerTag
-            self._channel.queue_bind(lambda *args: onBind(queue, consumerTag), queue, exchangeName, routing_key='')
+            self._channel.queue_bind(
+                lambda *args: onBind(queue, consumerTag), queue, exchangeName, routing_key='')
+
         def onExchangeDeclared(frame):
             self._channel.queue_declare(callback=onQueueDeclared, exclusive=True)
+
         self._readyEvent.wait(5)
         if not self._readyEvent.isSet():
             raise Exception("Timeout waiting for subscriber to connect to rabbitMQ")
