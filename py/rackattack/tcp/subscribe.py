@@ -12,6 +12,7 @@ class Subscribe(threading.Thread):
     def __init__(self, amqpURL):
         self._connection = None
         self._channel = None
+        self._channelLock = threading.Lock()
         self._amqpURL = amqpURL
         self._registered = dict()
         self._readyEvent = threading.Event()
@@ -23,7 +24,7 @@ class Subscribe(threading.Thread):
     def registerForInagurator(self, id, callback):
         exchange = self._exchangeForInaugurator(id)
         assert exchange not in self._registered
-        self._listen(exchange, callback)
+        _Subscribe(self._channel, self._channelLock, exchange, self._registered, callback)
 
     def unregisterForInaugurator(self, id):
         exchange = self._exchangeForInaugurator(id)
@@ -34,7 +35,7 @@ class Subscribe(threading.Thread):
     def registerForAllocation(self, id, callback):
         exchange = publish.Publish.allocationExchange(id)
         assert exchange not in self._registered
-        self._listen(exchange, callback)
+        _Subscribe(self._channel, self._channelLock, exchange, self._registered, callback)
 
     def unregisterForAllocation(self, id):
         exchange = publish.Publish.allocationExchange(id)
@@ -75,30 +76,6 @@ class Subscribe(threading.Thread):
         self._channel.add_on_close_callback(self._onChannelClosed)
         self._readyEvent.set()
 
-    def _listen(self, exchangeName, callback):
-        def onMessage(channel, basicDeliver, properties, body):
-            self._channel.basic_ack(basicDeliver.delivery_tag)
-            callback(simplejson.loads(body))
-
-        def onBind(queueName, consumerTag):
-            self._channel.basic_consume(onMessage, queueName, consumer_tag=consumerTag)
-            _logger.debug("Listening on exchange %(exchange)s", dict(exchange=exchangeName))
-
-        def onQueueDeclared(methodFrame):
-            queue = methodFrame.method.queue
-            consumerTag = queue + "__consumer"
-            self._registered[exchangeName] = consumerTag
-            self._channel.queue_bind(
-                lambda *args: onBind(queue, consumerTag), queue, exchangeName, routing_key='')
-
-        def onExchangeDeclared(frame):
-            self._channel.queue_declare(callback=onQueueDeclared, exclusive=True)
-
-        self._readyEvent.wait(5)
-        if not self._readyEvent.isSet():
-            raise Exception("Timeout waiting for subscriber to connect to rabbitMQ")
-        self._channel.exchange_declare(onExchangeDeclared, exchangeName, 'fanout')
-
     def run(self):
         _logger.info('Connecting to %(amqpURL)s', dict(amqpURL=self._amqpURL))
         self._connection = pika.SelectConnection(
@@ -106,3 +83,32 @@ class Subscribe(threading.Thread):
             self._onConnectionOpen,
             stop_ioloop_on_close=False)
         self._connection.ioloop.start()
+
+
+class _Subscribe:
+    def __init__(self, channel, channelLock, exchangeName, registered, callback):
+        self._channel = channel
+        self._channelLock = channelLock
+        self._exchangeName = exchangeName
+        self._registered = registered
+        self._callback = callback
+        self._channelLock.acquire()
+        self._channel.exchange_declare(self._onExchangeDeclared, self._exchangeName, 'fanout')
+
+    def _onMessage(self, channel, basicDeliver, properties, body):
+        self._channel.basic_ack(basicDeliver.delivery_tag)
+        self._callback(simplejson.loads(body))
+
+    def _onBind(self, *args):
+        self._channel.basic_consume(self._onMessage, self._queueName, consumer_tag=self._consumerTag)
+        self._channelLock.release()
+        _logger.debug("Listening on exchange %(exchange)s", dict(exchange=self._exchangeName))
+
+    def _onQueueDeclared(self, methodFrame):
+        self._queueName = methodFrame.method.queue
+        self._consumerTag = self._queueName + "__consumer"
+        self._registered[self._exchangeName] = self._consumerTag
+        self._channel.queue_bind(self._onBind, self._queueName, self._exchangeName, routing_key='')
+
+    def _onExchangeDeclared(self, frame):
+        self._channel.queue_declare(callback=self._onQueueDeclared, exclusive=True)
