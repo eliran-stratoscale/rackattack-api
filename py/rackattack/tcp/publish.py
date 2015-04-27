@@ -46,19 +46,18 @@ class Publish(PublishSpooler):
     def __init__(self, amqpURL):
         super(Publish, self).__init__(amqpURL)
 
-    def allocationChangedState(self, allocationID):
+    def _allocationEvent(self, event, allocationID, message=None):
         exchange = self.allocationExchange(allocationID)
-        self._publish(exchange, dict(event='changedState', allocationID=allocationID))
+        self._publish(exchange, dict(event=event, allocationID=allocationID, message=message))
+
+    def allocationChangedState(self, allocationID):
+        self._allocationEvent('changedState', allocationID)
 
     def allocationProviderMessage(self, allocationID, message):
-        exchange = self.allocationExchange(allocationID)
-        self._publish(exchange, dict(event='providerMessage', allocationID=allocationID,
-                                     message=message))
+        self._allocationEvent('providerMessage', allocationID, message) 
 
     def allocationWithdraw(self, allocationID, message):
-        exchange = self.allocationExchange(allocationID)
-        self._publish(exchange, dict(event='withdrawn', allocationID=allocationID,
-                                     message=message))
+        self._allocationEvent('withdrawn', allocationID, message) 
 
     @classmethod
     def allocationExchange(cls, id):
