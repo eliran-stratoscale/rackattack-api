@@ -54,10 +54,10 @@ class Publish(PublishSpooler):
         self._allocationEvent('changedState', allocationID)
 
     def allocationProviderMessage(self, allocationID, message):
-        self._allocationEvent('providerMessage', allocationID, message) 
+        self._allocationEvent('providerMessage', allocationID, message)
 
     def allocationWithdraw(self, allocationID, message):
-        self._allocationEvent('withdrawn', allocationID, message) 
+        self._allocationEvent('withdrawn', allocationID, message)
 
     @classmethod
     def allocationExchange(cls, id):
