@@ -43,6 +43,8 @@ class PublishSpooler(threading.Thread):
 
 
 class Publish(PublishSpooler):
+    ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME = 'allHostsAllocations'
+
     def __init__(self, amqpURL):
         super(Publish, self).__init__(amqpURL)
 
@@ -58,6 +60,17 @@ class Publish(PublishSpooler):
 
     def allocationWithdraw(self, allocationID, message):
         self._allocationEvent('withdrawn', allocationID, message)
+
+    def allocationRequested(self, requirements, allocationInfo):
+        self._publish(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, dict(
+            event='requested', requirements=requirements, allocationInfo=allocationInfo))
+
+    def allocationCreated(self, allocationID, requirements, allocationInfo, allocated):
+        allocatedIDs = {name: stateMachine.hostImplementation().id()
+                        for name, stateMachine in allocated.iteritems()}
+        self._publish(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, dict(
+            event='created', allocationID=allocationID, requirements=requirements,
+            allocationInfo=allocationInfo, allocated=allocatedIDs))
 
     @classmethod
     def allocationExchange(cls, id):

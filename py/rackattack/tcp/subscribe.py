@@ -23,31 +23,40 @@ class Subscribe(threading.Thread):
 
     def registerForInagurator(self, id, callback):
         exchange = self._exchangeForInaugurator(id)
-        assert exchange not in self._registered
-        _Subscribe(self._channel, self._channelLock, exchange, self._registered, callback)
+        self._registerToExchange(exchange, callback)
 
     def unregisterForInaugurator(self, id):
         exchange = self._exchangeForInaugurator(id)
-        assert exchange in self._registered
-        self._channel.basic_cancel(lambda *args: None, self._registered[exchange])
-        del self._registered[exchange]
+        self._unregisterFromExchange(exchange)
 
     def registerForAllocation(self, id, callback):
         exchange = publish.Publish.allocationExchange(id)
-        assert exchange not in self._registered
-        _Subscribe(self._channel, self._channelLock, exchange, self._registered, callback)
+        self._registerToExchange(exchange, callback)
 
     def unregisterForAllocation(self, id):
         exchange = publish.Publish.allocationExchange(id)
-        assert exchange in self._registered
-        self._channel.basic_cancel(lambda *args: None, self._registered[exchange])
-        del self._registered[exchange]
+        self._unregisterFromExchange(exchange)
+
+    def registerForAllAllocations(self, callback):
+        self._registerToExchange(publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, callback)
+
+    def unregisterForAllAllocations(self):
+        self._unregisterFromExchange(publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME)
 
     def close(self):
         _logger.info("Closing connection")
         self._closed = True
         self._channel.close()
         self._connection.close()
+
+    def _registerToExchange(self, exchange, callback):
+        assert exchange not in self._registered
+        _Subscribe(self._channel, self._channelLock, exchange, self._registered, callback)
+
+    def _unregisterFromExchange(self, exchange):
+        assert exchange in self._registered
+        self._channel.basic_cancel(lambda *args: None, self._registered[exchange])
+        del self._registered[exchange]
 
     def _exchangeForInaugurator(self, id):
         return "inaugurator_status__%s" % id
