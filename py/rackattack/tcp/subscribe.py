@@ -20,6 +20,9 @@ class Subscribe(threading.Thread):
         threading.Thread.__init__(self)
         self.daemon = True
         threading.Thread.start(self)
+        _logger.info("Waiting for subscribers' channel to be open.")
+        self._readyEvent.wait()
+        _logger.info("Subscribers' channel is open")
 
     def registerForInagurator(self, id, callback):
         exchange = self._exchangeForInaugurator(id)
