@@ -18,23 +18,21 @@ class Transaction:
     def __init__(self, message):
         self._message = message
         self._before = time.time()
-        self._unique = _generateUnique()
-        logger.debug("Starting '%(message)s' unique '%(unique)s'", dict(
-            message=self._message, unique=self._unique))
+        unique = _generateUnique()
+        self._uniqueStrRepr = "'%(message)s' unique '%(unique)s'" %  dict(message=self._message,
+                unique=unique)
+        logger.debug("Starting %(transaction)s", dict(transaction=self._uniqueStrRepr))
 
     def reportState(self, state):
-        logger.debug("%(state)s '%(message)s' unique '%(unique)s'", dict(
-            message=self._message, unique=self._unique, state=state))
+        logger.debug("%(state)s %(transaction)s", dict(transaction=self._uniqueStrRepr, state=state))
 
     def finished(self):
         took = time.time() - self._before
-        logger.debug("Finished '%(message)s' unique '%(unique)s' took %(took)s", dict(
-            message=self._message, unique=self._unique, took=took))
+        msg = "Finished %(transaction)s took %(took)s" % dict(transaction=self._uniqueStrRepr, took=took)
+        logger.debug(msg)
         if took > 0.1:
-            logger.error("'%(unique)s' took more than 0.1s: %(took)s", dict(
-                unique=self._unique, took=took))
-            logging.error("'%(unique)s' took more than 0.1s: %(took)s", dict(
-                unique=self._unique, took=took))
+            logger.error(msg)
+            logging.error(msg)
 
 
 def _generateUnique():
