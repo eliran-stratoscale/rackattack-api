@@ -15,6 +15,7 @@ def logNetwork(message):
 
 
 class Transaction:
+    TRANSACTION_PERIOD_MAX = 0.3
     def __init__(self, message):
         self._message = message
         self._before = time.time()
@@ -30,7 +31,7 @@ class Transaction:
         took = time.time() - self._before
         msg = "Finished %(transaction)s took %(took)s" % dict(transaction=self._uniqueStrRepr, took=took)
         logger.debug(msg)
-        if took > 0.1:
+        if took > self.TRANSACTION_PERIOD_MAX:
             logger.error(msg)
             logging.error(msg)
 
