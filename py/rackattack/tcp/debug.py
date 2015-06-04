@@ -16,12 +16,13 @@ def logNetwork(message):
 
 class Transaction:
     TRANSACTION_PERIOD_MAX = 0.3
+
     def __init__(self, message):
         self._message = message
         self._before = time.time()
         unique = _generateUnique()
-        self._uniqueStrRepr = "'%(message)s' unique '%(unique)s'" %  dict(message=self._message,
-                unique=unique)
+        self._uniqueStrRepr = "'%(message)s' unique '%(unique)s'" % dict(message=self._message,
+                                                                         unique=unique)
         logger.debug("Starting %(transaction)s", dict(transaction=self._uniqueStrRepr))
 
     def reportState(self, state):
