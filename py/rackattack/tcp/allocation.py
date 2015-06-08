@@ -111,9 +111,15 @@ class Allocation(api.Allocation):
     def _inauguratorEventBroadcasted(self, event):
         logging.debug("Inaugurator '%(id)s' event: %(event)s", dict(event=event, id=event['id']))
         if event['status'] == 'progress':
-            logging.info("Inaugurator '%(id)s' percent %(percent)s", dict(
-                id=event['id'], percent=event['progress']['percent']))
-            self._progressPercent[event['id']] = event['progress']['percent']
+            percent = event['progress']['percent']
+            state = event['progress']['state']
+            msg = "Inaugurator '%(id)s' %(state)s percent: %(percent)s" % dict(
+                    id=event['id'], percent=percent, state=state)
+            if state == 'fetching':
+                logging.info(msg)
+                self._progressPercent[event['id']] = percent
+            elif state == 'digesting':
+                logging.debug(msg)
         else:
             logging.info("Inaugurator '%(id)s' status %(status)s", event)
         if self._progressCallback is not None:
