@@ -114,7 +114,7 @@ class Allocation(api.Allocation):
             percent = event['progress']['percent']
             state = event['progress']['state']
             msg = "Inaugurator '%(id)s' %(state)s percent: %(percent)s" % dict(
-                    id=event['id'], percent=percent, state=state)
+                id=event['id'], percent=percent, state=state)
             if state == 'fetching':
                 logging.info(msg)
                 self._progressPercent[event['id']] = percent
