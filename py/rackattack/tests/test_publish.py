@@ -1,3 +1,4 @@
+import os
 import mock
 import json
 import pika
@@ -122,7 +123,15 @@ class Test(unittest.TestCase):
         self.threadStartMock.assert_called_once_with(self.tested)
 
     def test_BadURL(self):
-        self.assertRaises(Exception, self._generatePublishInstance, 'Fake AMQP URL')
+        killMock = mock.Mock()
+        origKill = os.kill
+        try:
+            os.kill = killMock
+            publishInstance = greenlet.greenlet(self._generatePublishInstance('invalid amqp url').run)
+            publishInstance.switch()
+        finally:
+            os.kill = origKill
+        self.assertEquals(killMock.call_count, 1)
 
     def test_AllocationChangedState(self):
         self._continueWithServer()
@@ -195,7 +204,7 @@ class Test(unittest.TestCase):
         return json.loads(message)
 
     def _generateRabbitMQConsumer(self, amqpURL):
-        return BlockingConnectionMock(pika.URLParameters(config.AMQP_URL)).channel()
+        return BlockingConnectionMock(pika.URLParameters(amqpURL)).channel()
 
     def _generatePublishInstance(self, amqpURL):
         origStart = threading.Thread.start

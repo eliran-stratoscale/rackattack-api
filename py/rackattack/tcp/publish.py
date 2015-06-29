@@ -1,4 +1,5 @@
-from inaugurator.server import config
+import os
+import signal
 import logging
 import pika
 import simplejson
@@ -16,7 +17,11 @@ class PublishSpooler(threading.Thread):
 
     def run(self):
         self._declaredExchanges = set()
-        self._connect()
+        try:
+            self._connect()
+        except:
+            logging.exception("Could not connect to RabbitMQ broker. Commiting suicide.")
+            os.kill(os.getpid(), signal.SIGTERM)
         while True:
             try:
                 finishedEvent, command, kwargs, returnValue = self._queue.get(block=True, timeout=10)
@@ -60,8 +65,8 @@ class PublishSpooler(threading.Thread):
         self._channel.exchange_delete(exchange=exchange)
 
     def _connect(self):
-        logging.info("Rackattack event publisher connects to rabbit MQ %(url)s", dict(url=config.AMQP_URL))
-        parameters = pika.URLParameters(config.AMQP_URL)
+        logging.info("Rackattack event publisher connects to rabbit MQ %(url)s", dict(url=self._amqpURL))
+        parameters = pika.URLParameters(self._amqpURL)
         self._connection = pika.BlockingConnection(parameters)
         self._channel = self._connection.channel()
 
