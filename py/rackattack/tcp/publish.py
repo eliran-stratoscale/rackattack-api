@@ -60,7 +60,7 @@ class PublishSpooler(threading.Thread):
     def _cleanupAllocationPublishResources(self, allocationID):
         exchange = self.allocationExchange(allocationID)
         if exchange not in self._declaredExchanges:
-            logger.warn("Tried to delete an unfamiliar exchange %(exchange)s.", dict(excahnge=exchange))
+            logging.warn("Tried to delete an unfamiliar exchange %(exchange)s.", dict(exchange=exchange))
             return
         self._channel.exchange_delete(exchange=exchange)
 

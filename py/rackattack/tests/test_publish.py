@@ -189,8 +189,15 @@ class Test(unittest.TestCase):
         client.switch()
         self._continueWithServer()
         client.switch()
-        self.assertEquals(len(self.consumer.exchanges), 1)
-        self.assertIn('', self.consumer.exchanges)
+        self.assertEquals(self.consumer.exchanges.keys(), [''])
+
+    def test_TryCleaningUpResourcesForANonExistingAllocationDoesNotCrashServer(self):
+        self._continueWithServer()
+        allocationID = 1
+        client = greenlet.greenlet(lambda: self.tested.cleanupAllocationPublishResources(allocationID))
+        client.switch()
+        self._continueWithServer()
+        client.switch()
 
     def _continueWithServer(self):
         if self.tested._queue.qsize() > 0:
