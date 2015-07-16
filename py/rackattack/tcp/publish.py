@@ -62,6 +62,7 @@ class PublishSpooler(threading.Thread):
         if exchange not in self._declaredExchanges:
             logging.warn("Tried to delete an unfamiliar exchange %(exchange)s.", dict(exchange=exchange))
             return
+        self._declaredExchanges.remove(exchange)
         self._channel.exchange_delete(exchange=exchange)
 
     def _connect(self):

@@ -199,6 +199,31 @@ class Test(unittest.TestCase):
         self._continueWithServer()
         client.switch()
 
+    def test_TryCleaningUpResourcesForAnAlreadyDeadAllocationDoesNotCrashServer(self):
+        self._continueWithServer()
+        allocationID = 1
+        client = greenlet.greenlet(lambda: self.tested.allocationChangedState(allocationID))
+        client.switch()
+        self._continueWithServer()
+        client.switch()
+        expectedMessage = dict(event='changedState', allocationID=allocationID, message=None)
+        expectedExchange = publish.PublishSpooler.allocationExchange(allocationID)
+        actualMessage = self._consume(expectedExchange)
+        self.assertEquals(actualMessage, expectedMessage)
+        self.assertEquals(len(self.consumer.exchanges), 2)
+        self.assertIn('', self.consumer.exchanges)
+        self.assertIn(expectedExchange, self.consumer.exchanges)
+        client = greenlet.greenlet(lambda: self.tested.cleanupAllocationPublishResources(allocationID))
+        client.switch()
+        self._continueWithServer()
+        client.switch()
+        self.assertEquals(self.consumer.exchanges.keys(), [''])
+        client = greenlet.greenlet(lambda: self.tested.cleanupAllocationPublishResources(allocationID))
+        client.switch()
+        self._continueWithServer()
+        client.switch()
+        self.assertEquals(self.consumer.exchanges.keys(), [''])
+
     def _continueWithServer(self):
         if self.tested._queue.qsize() > 0:
             item = self.originalGet(block=True, timeout=10)
