@@ -2,8 +2,7 @@ import os
 from rackattack.ssh import connection
 from rackattack import clientfactory
 from rackattack import api
-connection.discardParamikoLogs()
-connection.discardSSHDebugMessages()
+from rackattack import logconfig
 import argparse
 import time
 
