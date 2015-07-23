@@ -37,7 +37,7 @@ class Client(api.Client):
         self._activeAllocations.append(allocationInstance)
         return allocationInstance
 
-    def call(self, cmd, ipcTimeout=10, ** kwargs):
+    def call(self, cmd, ipcTimeout=50, ** kwargs):
         try:
             with self._lock:
                 if self._closed:
