@@ -24,32 +24,18 @@ class PublishSpooler(threading.Thread):
             os.kill(os.getpid(), signal.SIGTERM)
         while True:
             try:
-                finishedEvent, command, kwargs, returnValue = self._queue.get(block=True, timeout=10)
+                command, kwargs = self._queue.get(block=True, timeout=10)
             except Queue.Empty:
                 self._connection.process_data_events()
                 continue
             try:
-                returnValue.data = command(**kwargs)
+                command(**kwargs)
                 self._connection.process_data_events()
             except Exception as e:
-                returnValue.exception = e
                 logging.exception("Got an exception while handling command.")
-            finally:
-                finishedEvent.set()
 
     def _executeCommand(self, function, **kwargs):
-        class ReturnValue(object):
-            def __init__(self):
-                self.data = None
-                self.exception = None
-
-        finishedEvent = threading.Event()
-        returnValue = ReturnValue()
-        self._queue.put((finishedEvent, function, kwargs, returnValue), block=True)
-        finishedEvent.wait()
-        if returnValue.exception is not None:
-            raise returnValue.exception
-        return returnValue.data
+        self._queue.put((function, kwargs), block=True)
 
     def _publish(self, exchange, message):
         if exchange not in self._declaredExchanges:
