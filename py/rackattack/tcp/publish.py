@@ -30,7 +30,6 @@ class PublishSpooler(threading.Thread):
                 continue
             try:
                 command(**kwargs)
-                self._connection.process_data_events()
             except Exception as e:
                 logging.exception("Got an exception while handling command.")
 
