@@ -4,6 +4,7 @@ import pika
 import simplejson
 from rackattack.tcp import suicide
 from rackattack.tcp import publish
+from inaugurator.server import pikapatchwakeupfromanotherthread
 
 _logger = logging.getLogger(__name__)
 
@@ -12,7 +13,6 @@ class Subscribe(threading.Thread):
     def __init__(self, amqpURL):
         self._connection = None
         self._channel = None
-        self._channelLock = threading.Lock()
         self._amqpURL = amqpURL
         self._registered = dict()
         self._readyEvent = threading.Event()
@@ -26,25 +26,33 @@ class Subscribe(threading.Thread):
 
     def registerForInagurator(self, id, callback):
         exchange = self._exchangeForInaugurator(id)
-        self._registerToExchange(exchange, callback)
+        self._wakeUpFromAnotherThread.runInThread(self._registerToExchange,
+                                                  exchange=exchange,
+                                                  onRegisteredCallback=callback)
 
     def unregisterForInaugurator(self, id):
         exchange = self._exchangeForInaugurator(id)
-        self._unregisterFromExchange(exchange)
+        self._wakeUpFromAnotherThread.runInThread(self._unregisterFromExchange,
+                                                  exchange=exchange)
 
     def registerForAllocation(self, id, callback):
         exchange = publish.Publish.allocationExchange(id)
-        self._registerToExchange(exchange, callback)
+        self._wakeUpFromAnotherThread.runInThread(self._registerToExchange,
+                                                  exchange=exchange,
+                                                  onRegisteredCallback=callback)
 
     def unregisterForAllocation(self, id):
         exchange = publish.Publish.allocationExchange(id)
-        self._unregisterFromExchange(exchange)
+        self._wakeUpFromAnotherThread.runInThread(self._unregisterFromExchange,
+                                                  exchange=exchange)
 
     def registerForAllAllocations(self, callback):
-        self._registerToExchange(publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, callback)
+        exchange = publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME
+        self._wakeUpFromAnotherThread.runInThread(self._registerToExchange, exchange=exchange)
 
     def unregisterForAllAllocations(self):
-        self._unregisterFromExchange(publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME)
+        exchange = publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME
+        self._wakeUpFromAnotherThread.runInThread(self._unregisterFromExchange, exchange=exchange)
 
     def close(self):
         _logger.info("Closing connection")
@@ -52,9 +60,9 @@ class Subscribe(threading.Thread):
         self._channel.close()
         self._connection.close()
 
-    def _registerToExchange(self, exchange, callback):
+    def _registerToExchange(self, exchange, onRegisteredCallback):
         assert exchange not in self._registered
-        _Subscribe(self._channel, self._channelLock, exchange, self._registered, callback)
+        _Subscribe(self._channel, exchange, self._registered, onRegisteredCallback)
 
     def _unregisterFromExchange(self, exchange):
         assert exchange in self._registered
@@ -94,17 +102,17 @@ class Subscribe(threading.Thread):
             pika.URLParameters(self._amqpURL),
             self._onConnectionOpen,
             stop_ioloop_on_close=False)
+        self._wakeUpFromAnotherThread = \
+            pikapatchwakeupfromanotherthread.PikaPatchWakeUpFromAnotherThread(_logger, self._connection)
         self._connection.ioloop.start()
 
 
 class _Subscribe:
-    def __init__(self, channel, channelLock, exchangeName, registered, callback):
+    def __init__(self, channel, exchangeName, registered, callback):
         self._channel = channel
-        self._channelLock = channelLock
         self._exchangeName = exchangeName
         self._registered = registered
         self._callback = callback
-        self._channelLock.acquire()
         self._channel.exchange_declare(self._onExchangeDeclared, self._exchangeName, 'fanout')
 
     def _onMessage(self, channel, basicDeliver, properties, body):
@@ -113,7 +121,6 @@ class _Subscribe:
 
     def _onBind(self, *args):
         self._channel.basic_consume(self._onMessage, self._queueName, consumer_tag=self._consumerTag)
-        self._channelLock.release()
         _logger.debug("Listening on exchange %(exchange)s", dict(exchange=self._exchangeName))
 
     def _onQueueDeclared(self, methodFrame):
