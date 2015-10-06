@@ -4,7 +4,7 @@ import pika
 import simplejson
 from rackattack.tcp import suicide
 from rackattack.tcp import publish
-from inaugurator.server import pikapatchwakeupfromanotherthread
+from rackattack import pikapatchwakeupfromanotherthread
 
 _logger = logging.getLogger(__name__)
 
