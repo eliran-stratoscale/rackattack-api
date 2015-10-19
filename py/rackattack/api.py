@@ -31,7 +31,7 @@ class Client:
 
 
 class Requirement:
-    def __init__(self, imageLabel, imageHint, hardwareConstraints=None):
+    def __init__(self, imageLabel, imageHint, hardwareConstraints=None, pool=None):
         """
         Describes what is expected of the allocated node.
         imageLabel is the name of the label to osmos into the node, or None
@@ -46,6 +46,7 @@ class Requirement:
             minimumDisk1SizeGB=16, minimumDisk2SizeGB=16)
         if hardwareConstraints is not None:
             self.hardwareConstraints.update(hardwareConstraints)
+        self.pool = pool
 
 
 class AllocationInfo:
