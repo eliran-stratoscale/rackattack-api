@@ -55,7 +55,12 @@ class TunnelConnection:
             assert self._channel not in readReadySockets
             return
         if self._channel in readReadySockets:
-            data = self._channel.recv(2048)
+            try:
+                data = self._channel.recv(2048)
+            except socket.error as e:
+                self._shutdownFromRemote = True
+                return
+
             if len(data) != 0:
                 try:
                     self._socket.send(data)
@@ -90,7 +95,10 @@ class TunnelConnection:
                     self._logger.debug("Both ends shutdown, closing connection")
                     self.close()
             else:
-                self._channel.send(data)
+                try:
+                    self._channel.send(data)
+                except socket.error as e:
+                    self._shutdownFromRemote = True
 
     def _safeShutdown(self, thing, shutdownFlag):
         try:
