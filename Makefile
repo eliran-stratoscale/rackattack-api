@@ -15,4 +15,4 @@ delayed_racktest:
 virttest:
 	RACKATTACK_PROVIDER=tcp://localhost:1014@@amqp://guest:guest@localhost:1013/%2F@@http://localhost:1016 $(MAKE) delayed_racktest
 phystest:
-	RACKATTACK_PROVIDER=tcp://rackattack-provider:1014@@amqp://guest:guest@rackattack-provider:1013/%2F@@http://rackattack-provider:1016 $(MAKE) delayed_racktest
+	RACKATTACK_PROVIDER=tcp://rackattack-provider.dc1.strato:1014@@amqp://guest:guest@rackattack-provider.dc1.strato:1013/%2F@@http://rackattack-provider.dc1.strato:1016 $(MAKE) delayed_racktest
