@@ -16,7 +16,7 @@ class Allocation(api.Allocation):
         self._dead = None
         self._progressCallback = None
         self._progressPercent = dict()
-        self._inauguratorsIDs = []
+        self._inauguratorsIDs = dict()
         self._waitEvent = threading.Event()
         self._subscribe.registerForAllocation(self._id, self._allocationEventBroadcasted)
         self._refetchInauguratorIDs()
@@ -76,6 +76,14 @@ class Allocation(api.Allocation):
         self._dead = "freed"
         self._close()
 
+    def releaseHost(self, name):
+        if name not in self._inauguratorsIDs:
+            logging.error("Cannot release host %(name)s since it's not allocated", dict(name=name))
+            raise ValueError(name)
+        hostID = self._inauguratorsIDs[name]
+        self._ipcClient.call('node__releaseFromAllocation', allocationID=self._id, nodeID=hostID)
+        self._refetchInauguratorIDs()
+
     def _close(self):
         self._heartbeat.unregister(self._id)
         for id in self._inauguratorsIDs.values():
@@ -131,9 +139,13 @@ class Allocation(api.Allocation):
         return sum(self._progressPercent.values()) / (len(self._progressPercent))
 
     def _refetchInauguratorIDs(self):
-        previous = self._inauguratorsIDs
+        previous = self._inauguratorsIDs.values()
         self._inauguratorsIDs = self._ipcClient.call('allocation__inauguratorsIDs', id=self._id)
-        for id in self._inauguratorsIDs.values():
-            if id not in previous:
-                logging.info("Adding inaugurator to listen to: %(id)s", dict(id=id))
-                self._subscribe.registerForInagurator(id, self._inauguratorEventBroadcasted)
+        newIDs = [hostID for hostID in self._inauguratorsIDs.values() if hostID not in previous]
+        for id in newIDs:
+            logging.info("Adding inaugurator to listen to: %(id)s", dict(id=id))
+            self._subscribe.registerForInagurator(id, self._inauguratorEventBroadcasted)
+        removedIDs = [hostID for hostID in previous if hostID not in self._inauguratorsIDs.values()]
+        for id in removedIDs:
+            logging.info("Unregistering from inaugurator of: %(id)s", dict(id=id))
+            self._subscribe.unregisterForInaugurator(id)
