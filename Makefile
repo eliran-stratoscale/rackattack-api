@@ -2,7 +2,7 @@ all: check_convention unittest
 
 unittest:
 	UPSETO_JOIN_PYTHON_NAMESPACES=Yes PYTHONPATH=py python -m coverage run py/rackattack/tests/runner.py
-	python -m coverage report --show-missing --rcfile=coverage.config --include=py/*.py --omit=py/rackattack/tests/*.py,*/__init__.py
+	python -m coverage report --show-missing --include=py/*.py --omit=py/rackattack/tests/*.py,*/__init__.py
 
 check_convention:
 	pep8 py test* --max-line-length=109
