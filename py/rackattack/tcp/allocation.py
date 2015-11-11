@@ -81,8 +81,12 @@ class Allocation(api.Allocation):
             logging.error("Cannot release host %(name)s since it's not allocated", dict(name=name))
             raise ValueError(name)
         hostID = self._inauguratorsIDs[name]
-        self._ipcClient.call('node__releaseFromAllocation', allocationID=self._id, nodeID=hostID)
-        self._refetchInauguratorIDs()
+        # Cannot call allocation__inauguratorsIDs if allocation is already dead
+        if len(self._inauguratorsIDs) == 1:
+            self.free()
+        else:
+            self._ipcClient.call('node__releaseFromAllocation', allocationID=self._id, nodeID=hostID)
+            self._refetchInauguratorIDs()
 
     def _close(self):
         self._heartbeat.unregister(self._id)
