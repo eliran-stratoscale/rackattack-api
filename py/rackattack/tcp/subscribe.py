@@ -48,7 +48,9 @@ class Subscribe(threading.Thread):
 
     def registerForAllAllocations(self, callback):
         exchange = publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME
-        self._wakeUpFromAnotherThread.runInThread(self._registerToExchange, exchange=exchange)
+        self._wakeUpFromAnotherThread.runInThread(self._registerToExchange,
+                                                  exchange=exchange,
+                                                  onRegisteredCallback=callback)
 
     def unregisterForAllAllocations(self):
         exchange = publish.Publish.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME
