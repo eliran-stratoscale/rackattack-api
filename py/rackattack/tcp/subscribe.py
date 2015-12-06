@@ -19,10 +19,10 @@ class Subscribe(threading.Thread):
         self._closed = False
         threading.Thread.__init__(self)
         self.daemon = True
+        _logger.info("Creating a channel to Rackattack's RabbitMQ...")
         threading.Thread.start(self)
-        _logger.info("Waiting for subscribers' channel to be open.")
         self._readyEvent.wait()
-        _logger.info("Subscribers' channel is open")
+        _logger.info("Channel is open.")
 
     def registerForInagurator(self, id, callback):
         exchange = self._exchangeForInaugurator(id)
@@ -84,7 +84,7 @@ class Subscribe(threading.Thread):
             suicide.killSelf()
 
     def _onConnectionOpen(self, unused_connection):
-        _logger.info('Connection opened')
+        _logger.info('Connection is open. Openning a channel...')
         self._connection.add_on_close_callback(self._onConnectionClosed)
         self._connection.channel(on_open_callback=self._onChannelOpen)
 
@@ -99,13 +99,14 @@ class Subscribe(threading.Thread):
         self._readyEvent.set()
 
     def run(self):
-        _logger.info('Connecting to %(amqpURL)s', dict(amqpURL=self._amqpURL))
+        _logger.info("Connecting to '%(amqpURL)s'...", dict(amqpURL=self._amqpURL))
         self._connection = pika.SelectConnection(
             pika.URLParameters(self._amqpURL),
             self._onConnectionOpen,
             stop_ioloop_on_close=False)
         self._wakeUpFromAnotherThread = \
             pikapatchwakeupfromanotherthread.PikaPatchWakeUpFromAnotherThread(_logger, self._connection)
+        _logger.debug("Starting pika's IO loop...")
         self._connection.ioloop.start()
 
 

@@ -19,11 +19,27 @@ class Allocation(api.Allocation):
         self._inauguratorsIDs = dict()
         self._waitEvent = threading.Event()
         self._subscribe.registerForAllocation(self._id, self._allocationEventBroadcasted)
+        logging.info("Allocation created (id: %(id)s). Fetching list of allocated nodes from Rackattack...",
+                     dict(id=self._id))
         self._refetchInauguratorIDs()
+        self._logNodesList()
         self._heartbeat.register(id)
         if self.dead() or self.done():
             self._waitEvent.set()
-        logging.info("allocation created")
+
+    def _logNodesList(self):
+        nodesNames = self._inauguratorsIDs.keys()
+        nodesNames.sort()
+        nodes = ["%(nodeName)s (%(serverName)s)" % dict(serverName=self._inauguratorsIDs[nodeName],
+                                                        nodeName=nodeName)
+                 for nodeName in nodesNames]
+        nrNodes = len(nodesNames)
+        if nrNodes > 1:
+            nodes = "\n\t".join(nodes)
+            logging.info("The following %(nrNodes)s nodes were allocated:\n\t%(nodes)s\n",
+                         dict(nrNodes=nrNodes, nodes=nodes))
+        else:
+            logging.info("Node %(node)s was allocated.", dict(node=nodes[0]))
 
     def _idForNodeIPC(self):
         assert not self._dead
@@ -147,9 +163,9 @@ class Allocation(api.Allocation):
         self._inauguratorsIDs = self._ipcClient.call('allocation__inauguratorsIDs', id=self._id)
         newIDs = [hostID for hostID in self._inauguratorsIDs.values() if hostID not in previous]
         for id in newIDs:
-            logging.info("Adding inaugurator to listen to: %(id)s", dict(id=id))
+            logging.debug("Subscribing to messages from inaugurator of '%(id)s'", dict(id=id))
             self._subscribe.registerForInagurator(id, self._inauguratorEventBroadcasted)
         removedIDs = [hostID for hostID in previous if hostID not in self._inauguratorsIDs.values()]
         for id in removedIDs:
-            logging.info("Unregistering from inaugurator of: %(id)s", dict(id=id))
+            logging.debug("Unregistering from inaugurator of: %(id)s", dict(id=id))
             self._subscribe.unregisterForInaugurator(id)
