@@ -119,22 +119,26 @@ class Allocation(api.Allocation):
         self._dead = "connection to provider terminated"
         self._close()
 
+    def _handleWithdrawl(self, moreInfo):
+        if self._forceReleaseCallback is None:
+            logging.error(
+                "Rackattack provider widthdrew allocation: '%(message)s'. No ForceRelease callback is "
+                "registered. Commiting suicide", dict(message=moreInfo))
+            suicide.killSelf()
+        else:
+            logging.warning(
+                "Rackattack provider widthdrew allocation: '%(message)s'. ForceRelease callback is "
+                "registered. Calling...", dict(message=moreInfo))
+            self._forceReleaseCallback()
+
     def _allocationEventBroadcasted(self, event):
-        if event.get('event', None) == "changedState":
+        eventType = event.get('event', None)
+        if eventType == "changedState":
             self._waitEvent.set()
-        elif event.get('event', None) == "providerMessage":
+        elif eventType == "providerMessage":
             logging.info("Rackattack provider says: %(message)s", dict(message=event['message']))
-        elif event.get('event', None) == "withdrawn":
-            if self._forceReleaseCallback is None:
-                logging.error(
-                    "Rackattack provider widthdrew allocation: '%(message)s'. No ForceRelease callback is "
-                    "registered. Commiting suicide", dict(message=event['message']))
-                suicide.killSelf()
-            else:
-                logging.warning(
-                    "Rackattack provider widthdrew allocation: '%(message)s'. ForceRelease callback is "
-                    "registered. Calling...", dict(message=event['message']))
-                self._forceReleaseCallback()
+        elif eventType == "withdrawn":
+            self._handleWithdrawl(event["message"])
 
     def _inauguratorEventBroadcasted(self, event):
         logging.debug("Inaugurator '%(id)s' event: %(event)s", dict(event=event, id=event['id']))

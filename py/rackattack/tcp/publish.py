@@ -13,10 +13,10 @@ class PublishSpooler(threading.Thread):
         self.daemon = True
         self._queue = Queue.Queue()
         self._amqpURL = amqpURL
+        self._declaredExchanges = set()
         threading.Thread.start(self)
 
     def run(self):
-        self._declaredExchanges = set()
         try:
             self._connect()
         except:
@@ -67,28 +67,37 @@ class Publish(PublishSpooler):
     def __init__(self, amqpURL):
         super(Publish, self).__init__(amqpURL)
 
-    def allocationChangedState(self, allocationID):
-        self._publishAllocationStatus('changedState', allocationID)
-
     def cleanupAllocationPublishResources(self, allocationID):
         self._executeCommand(self._cleanupAllocationPublishResources, allocationID=allocationID)
 
     def allocationProviderMessage(self, allocationID, message):
         self._publishAllocationStatus('providerMessage', allocationID, message)
 
-    def allocationWithdraw(self, allocationID, message):
-        self._publishAllocationStatus('withdrawn', allocationID, message)
-
     def allocationRequested(self, requirements, allocationInfo):
         self._publishMessage(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME,
                              event='requested', requirements=requirements, allocationInfo=allocationInfo)
 
-    def allocationCreated(self, allocationID, requirements, allocationInfo, allocated):
+    def allocationRejected(self, reason):
+        self._publishMessage(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, event='rejected', reason=reason)
+
+    def allocationCreated(self, allocationID, allocated):
         allocatedIDs = {name: stateMachine.hostImplementation().id()
                         for name, stateMachine in allocated.iteritems()}
-        self._publishMessage(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME,
-                             event='created', allocationID=allocationID, requirements=requirements,
-                             allocationInfo=allocationInfo, allocated=allocatedIDs)
+        self._publishMessage(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, event='created',
+                             allocationID=allocationID, allocated=allocatedIDs)
+
+    def allocationDone(self, allocationID):
+        self._publishAllocationStatus('changedState', allocationID)
+        message = dict(event="done", allocationID=allocationID)
+        self._publishMessage(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, **message)
+
+    def allocationDied(self, allocationID, reason, message=None):
+        if reason == "withdrawn":
+            self._publishAllocationStatus(reason, allocationID, message)
+        else:
+            self._publishAllocationStatus('changedState', allocationID)
+        message = dict(event="dead", allocationID=allocationID, reason=reason, moreInfo=message)
+        self._publishMessage(self.ALL_HOSTS_ALLOCATIONS_EXCHANGE_NAME, **message)
 
     def _publishMessage(self, exchange, **message):
         self._executeCommand(self._publish, exchange=exchange, message=message)
