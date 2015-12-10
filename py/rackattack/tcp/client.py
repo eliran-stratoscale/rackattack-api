@@ -13,13 +13,14 @@ class Client(api.Client):
                  providerRequestLocation,
                  providerSubscribeLocation,
                  providerHTTPLocation):
+        self._providerSubscribeLocation = providerSubscribeLocation
         self._providerHTTPLocation = providerHTTPLocation
         self._request = transport.Transport(providerRequestLocation)
         self._lock = threading.Lock()
         self._closed = False
         self._activeAllocations = []
         self.call("handshake", versionInfo=dict(RACKATTACK_VERSION=api.VERSION))
-        self._subscribe = subscribe.Subscribe(amqpURL=providerSubscribeLocation)
+        self._subscribe = None
         self._connectionToProviderInterrupted = suicide.killSelf
         self._heartbeat = heartbeat.HeartBeat(self)
 
@@ -27,6 +28,8 @@ class Client(api.Client):
         assert len(requirements) > 0
         jsonableRequirements = {
             name: requirement.__dict__ for name, requirement in requirements.iteritems()}
+        if self._subscribe is None:
+            self._subscribe = subscribe.Subscribe(amqpURL=self._providerSubscribeLocation)
         allocationID = self.call(
             cmd='allocate',
             requirements=jsonableRequirements,
@@ -77,7 +80,7 @@ class Client(api.Client):
         if self._closed:
             return
         self._closed = True
-        if hasattr(self, '_subscribe'):
+        if hasattr(self, '_subscribe') and self._subscribe is not None:
             self._subscribe.close()
         self._request.close()
 
