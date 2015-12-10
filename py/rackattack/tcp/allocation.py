@@ -154,9 +154,10 @@ class Allocation(api.Allocation):
             self._progressCallback(overallPercent=self._overallPercent(), event=event)
 
     def _overallPercent(self):
-        if len(self._progressPercent) == 0:
+        nrNodes = len(self._requirements)
+        if nrNodes == 0:
             return 0
-        return sum(self._progressPercent.values()) / (len(self._progressPercent))
+        return sum(self._progressPercent.values()) / nrNodes
 
     def _refetchInauguratorIDs(self):
         previous = self._inauguratorsIDs.values()
