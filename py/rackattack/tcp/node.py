@@ -29,6 +29,9 @@ class Node(api.Node):
     def secondaryMACAddress(self):
         return self._info['secondaryMACAddress']
 
+    def getMacAddress(self, macName):
+        return self._info[macName]
+
     def ipAddress(self):
         return self._info['ipAddress']
 
