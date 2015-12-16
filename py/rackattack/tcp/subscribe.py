@@ -100,10 +100,16 @@ class Subscribe(threading.Thread):
 
     def run(self):
         _logger.info("Connecting to '%(amqpURL)s'...", dict(amqpURL=self._amqpURL))
-        self._connection = pika.SelectConnection(
-            pika.URLParameters(self._amqpURL),
-            self._onConnectionOpen,
-            stop_ioloop_on_close=False)
+        try:
+            self._connection = pika.SelectConnection(
+                pika.URLParameters(self._amqpURL),
+                self._onConnectionOpen,
+                stop_ioloop_on_close=False)
+        except Exception as ex:
+            _logger.exception("Subscribe thread has crashed: %(message)s", dict(message=str(ex)))
+            _logger.info("Commiting suicide...")
+            suicide.killSelf()
+            raise
         self._wakeUpFromAnotherThread = \
             pikapatchwakeupfromanotherthread.PikaPatchWakeUpFromAnotherThread(_logger, self._connection)
         _logger.debug("Starting pika's IO loop...")
