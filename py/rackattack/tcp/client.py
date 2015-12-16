@@ -31,6 +31,12 @@ class Client(api.Client):
             cmd='allocate',
             requirements=jsonableRequirements,
             allocationInfo=allocationInfo.__dict__)
+        return self._getAllocationInstance(requirements, allocationID)
+
+    def allocateExisting(self, requirements, allocationID):
+        return self._getAllocationInstance(requirements, allocationID)
+
+    def _getAllocationInstance(self, requirements, allocationID):
         allocationInstance = allocation.Allocation(
             id=allocationID, requirements=requirements, ipcClient=self,
             subscribe=self._subscribe, heartbeat=self._heartbeat)
