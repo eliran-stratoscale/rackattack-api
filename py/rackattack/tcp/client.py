@@ -6,6 +6,7 @@ from rackattack.tcp import subscribe
 from rackattack.tcp import suicide
 from rackattack.tcp import transport
 import urllib2
+import os
 
 
 class Client(api.Client):
@@ -21,15 +22,17 @@ class Client(api.Client):
         self._activeAllocations = []
         self.call("handshake", versionInfo=dict(RACKATTACK_VERSION=api.VERSION))
         self._subscribe = None
-        self._connectionToProviderInterrupted = suicide.killSelf
+        self._connectionToProviderInterrupted = self._connectionToProviderInterruptedDefaultCallback
         self._heartbeat = heartbeat.HeartBeat(self)
+        self._skipSuicide = bool(os.getenv("SKIP_SUICIDE", None))
 
     def allocate(self, requirements, allocationInfo):
         assert len(requirements) > 0
         jsonableRequirements = {
             name: requirement.__dict__ for name, requirement in requirements.iteritems()}
         if self._subscribe is None:
-            self._subscribe = subscribe.Subscribe(amqpURL=self._providerSubscribeLocation)
+            self._subscribe = subscribe.Subscribe(amqpURL=self._providerSubscribeLocation,
+                                                  skipSuicide=self._skipSuicide)
         allocationID = self.call(
             cmd='allocate',
             requirements=jsonableRequirements,
@@ -93,6 +96,10 @@ class Client(api.Client):
         for allocationInstance in list(self._activeAllocations):
             allocationInstance.connectionToProviderInterrupted()
         assert len(self._activeAllocations) == 0
+
+    def _connectionToProviderInterruptedDefaultCallback(self):
+        if not self._skipSuicide:
+            suicide.killSelf()
 
     def setConnectionToProviderInterruptedCallback(self, callback):
         self._connectionToProviderInterrupted = callback

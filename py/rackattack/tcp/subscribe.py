@@ -10,11 +10,12 @@ _logger = logging.getLogger(__name__)
 
 
 class Subscribe(threading.Thread):
-    def __init__(self, amqpURL):
+    def __init__(self, amqpURL, skipSuicide=False):
         self._connection = None
         self._channel = None
         self._amqpURL = amqpURL
         self._registered = dict()
+        self._skipSuicide = skipSuicide
         self._readyEvent = threading.Event()
         self._closed = False
         threading.Thread.__init__(self)
@@ -78,6 +79,9 @@ class Subscribe(threading.Thread):
         self._channel = None
         if self._closed:
             self._connection.ioloop.stop()
+        elif self._skipSuicide:
+            _logger.error("Connection closed, not commiting suicide: %(replyCode)s %(replyText)s", dict(
+                replyCode=reply_code, replyText=reply_text))
         else:
             _logger.error("Connection closed, committing suicide: %(replyCode)s %(replyText)s", dict(
                 replyCode=reply_code, replyText=reply_text))
@@ -107,8 +111,9 @@ class Subscribe(threading.Thread):
                 stop_ioloop_on_close=False)
         except Exception as ex:
             _logger.exception("Subscribe thread has crashed: %(message)s", dict(message=str(ex)))
-            _logger.info("Commiting suicide...")
-            suicide.killSelf()
+            if not self._skipSuicide:
+                _logger.info("Commiting suicide...")
+                suicide.killSelf()
             raise
         self._wakeUpFromAnotherThread = \
             pikapatchwakeupfromanotherthread.PikaPatchWakeUpFromAnotherThread(_logger, self._connection)
