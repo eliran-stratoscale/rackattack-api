@@ -29,8 +29,8 @@ class Node(api.Node):
     def secondaryMACAddress(self):
         return self._info['secondaryMACAddress']
 
-    def NICBondingPairs(self):
-        return self._info['NICBondingPairs']
+    def NICBondings(self):
+        return self._info['NICBondings']
 
     def getMacAddress(self, macName):
         return self._info[macName]
