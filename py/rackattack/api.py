@@ -31,7 +31,7 @@ class Client:
 
 
 class Requirement:
-    def __init__(self, imageLabel, imageHint, hardwareConstraints=None, pool=None):
+    def __init__(self, imageLabel, imageHint, hardwareConstraints=None, pool=None, serverIDWildcard="*"):
         """
         Describes what is expected of the allocated node.
         imageLabel is the name of the label to osmos into the node, or None
@@ -47,6 +47,7 @@ class Requirement:
         if hardwareConstraints is not None:
             self.hardwareConstraints.update(hardwareConstraints)
         self.pool = pool
+        self.serverIDWildcard = serverIDWildcard
 
 
 class AllocationInfo:
